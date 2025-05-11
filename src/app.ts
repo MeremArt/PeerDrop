@@ -69,8 +69,9 @@ app.use(
 
 app.get("/", (req, res) => {
   res.json({
-    message: "Welcome to PeerToPair - Send USDC via SMS! 🚀",
-    description: "A simple and secure way to send USDC using phone numbers.",
+    message: "Welcome to Cloutchain - Send Sonic via SMS $ Tiplinks! 🚀",
+    description:
+      "A simple and secure way to tip Sonic using phone numbers and tiplinks.",
     version: "1.0.0",
     documentation: {
       description: "Explore our API endpoints:",
