@@ -1,23 +1,23 @@
-import { Document } from "mongoose";
+import { Document, Types } from "mongoose";
 import { Request } from "express";
 import { Transaction, PublicKey } from "@solana/web3.js";
 
 export interface IUser extends Document {
+  _id: Types.ObjectId;
   email: string;
-  password: string;
+  password?: string; // Optional for Civic Auth users
+  tiktokUsername: string;
   walletAddress: string;
-  privateKey: string;
-  tiktokUsername?: string;
-  createdAt: Date;
-
-  // New fields for token account
+  privateKey?: string; // Optional for Civic Auth users
   tokenAccountAddress?: string;
-  tokenAccountCreated: boolean;
+  tokenAccountCreated?: boolean;
   tokenAccountCreationDate?: Date;
-
+  authMethod: "traditional" | "civic" | "dual";
+  lastLogin?: Date;
+  createdAt: Date;
+  updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
-
 export interface TransactionRequest {
   fromPhone: string;
   toPhone: string;

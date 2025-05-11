@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/database";
+
 import withdrawalRoutes from "./routes/withdrawal.routes";
 import transactionRoutes from "./routes/transactionRoutes";
 import authRoutes from "./routes/auth.routes";

@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Schema, model } from "mongoose";
 import bcrypt from "bcryptjs";
 import { IUser } from "../types";
 
@@ -72,71 +72,105 @@ import { IUser } from "../types";
  *           format: date-time
  *           description: Account creation timestamp
  */
-const userSchema = new Schema<IUser>({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  password: {
-    type: String,
-    required: true,
-  },
 
-  walletAddress: {
-    type: String,
-    required: true,
-  },
-  privateKey: {
-    type: String,
-    required: true,
-    // Note: In production, this should be encrypted
-  },
-  // New fields for token account information
-  tokenAccountAddress: {
-    type: String,
-    required: false, // Not required at creation time
-  },
-  tokenAccountCreated: {
-    type: Boolean,
-    default: false,
-  },
-  tokenAccountCreationDate: {
-    type: Date,
-    required: false,
-  },
-  tiktokUsername: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+const userSchema = new Schema<IUser>(
+  {
+    // Keep your existing fields
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
+    password: {
+      type: String,
+      // Make password optional for Civic Auth users
+      required: function (this: IUser) {
+        return this.authMethod === "traditional" || this.authMethod === "dual";
+      },
+      min: [8, "Password must be at least 8 characters long"],
+    },
+    tiktokUsername: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    walletAddress: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    privateKey: {
+      type: String,
+      // Private key not required for Civic Auth users
+      required: function (this: IUser) {
+        return this.authMethod === "traditional";
+      },
+    },
 
-userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+    // Keep your existing token account fields
+    tokenAccountAddress: {
+      type: String,
+      default: null,
+    },
+    tokenAccountCreated: {
+      type: Boolean,
+      default: false,
+    },
+    tokenAccountCreationDate: {
+      type: Date,
+      default: null,
+    },
 
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error as Error);
+    // Add new fields for Civic Auth
+    authMethod: {
+      type: String,
+      enum: ["traditional", "civic", "dual"],
+      default: "traditional",
+    },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
   }
+);
+
+// Your existing password hashing and validation methods
+userSchema.pre("save", async function (next) {
+  const user = this;
+
+  // Only hash the password if it has been modified or is new, and if it exists
+  if ((user.isModified("password") || user.isNew) && user.password) {
+    try {
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(user.password, salt);
+    } catch (error) {
+      return next(error as Error);
+    }
+  }
+
+  next();
 });
 
-// Method to compare passwords
 userSchema.methods.comparePassword = async function (
   candidatePassword: string
 ): Promise<boolean> {
   try {
+    // If no password (Civic Auth user), return false
+    if (!this.password) {
+      return false;
+    }
+
     return await bcrypt.compare(candidatePassword, this.password);
   } catch (error) {
-    throw new Error(`Password comparison error: ${(error as Error).message}`);
+    throw error;
   }
 };
 
-export default mongoose.model<IUser>("User", userSchema);
+const User = model<IUser>("User", userSchema);
+export default User;

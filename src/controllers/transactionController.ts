@@ -35,6 +35,15 @@ export const sendTransaction = async (
       });
     }
 
+    // Check if sender has privateKey (required for traditional accounts)
+    if (!sender.privateKey) {
+      return res.status(400).json({
+        message: "Cannot process transaction",
+        error:
+          "Sender does not have a managed wallet private key. For Civic Auth users, please send directly from your wallet.",
+      });
+    }
+
     // Check sender's balance
     const balance = await solanaService.getBalance(sender.walletAddress);
     if (balance < amount) {
@@ -45,9 +54,9 @@ export const sendTransaction = async (
       });
     }
 
-    // Create and send transaction
+    // Create and send transaction - Use non-null assertion
     const transaction = await solanaService.sendTransaction(
-      sender.privateKey,
+      sender.privateKey!, // Non-null assertion after check
       receiver.walletAddress,
       amount
     );
@@ -278,7 +287,16 @@ export const withdrawToBank = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check user's token balance (Note: now checking token balance instead of SOL balance)
+    // Check if user has privateKey (required for traditional accounts)
+    if (!user.privateKey) {
+      return res.status(400).json({
+        message: "Cannot process withdrawal",
+        error:
+          "User does not have a managed wallet private key. For Civic Auth users, please withdraw directly from your wallet.",
+      });
+    }
+
+    // Check user's token balance
     const tokenBalance = await solanaService.getTokenBalance(
       user.walletAddress
     );
@@ -296,12 +314,11 @@ export const withdrawToBank = async (req: Request, res: Response) => {
     const amountAfterFee = amount - fee;
 
     // Deduct tokens from user's account
-    // This requires a transaction to your treasury wallet using the sendTransaction
-    // method that handles token transfers
+    // Use non-null assertion (!) since we've already checked for null above
     const transaction = await solanaService.sendTransaction(
-      user.privateKey,
-      treasuryConfig.TREASURY_WALLET_ADDRESS, // Your company's treasury wallet
-      amount // The amount will be in token units
+      user.privateKey!, // Non-null assertion
+      treasuryConfig.TREASURY_WALLET_ADDRESS,
+      amount
     );
 
     // Create a pending bank withdrawal record
@@ -414,6 +431,15 @@ export const withdrawToExternalWallet = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Check if user has privateKey (required for traditional accounts)
+    if (!user.privateKey) {
+      return res.status(400).json({
+        message: "Cannot process withdrawal",
+        error:
+          "User does not have a managed wallet private key. For Civic Auth users, please withdraw directly from your wallet.",
+      });
+    }
+
     // Check if user has enough SOINC tokens
     const tokenBalance = await solanaService.getTokenBalance(
       user.walletAddress
@@ -449,14 +475,15 @@ export const withdrawToExternalWallet = async (req: Request, res: Response) => {
       `Fee: ${fee} SOINC (${feePercentage}%), Amount after fee: ${amountAfterFee} SOINC`
     );
 
-    // Send tokens directly to user's destination wallet
+    // Send tokens directly to user's destination wallet - Now using non-null assertion since we checked above
     let transactionId = null;
     try {
       console.log(
         `Sending ${amountAfterFee} SOINC to destination: ${sanitizedWallet}`
       );
+      // Use non-null assertion (!) since we've already checked for null above
       transactionId = await solanaService.sendTransaction(
-        user.privateKey,
+        user.privateKey!, // Non-null assertion
         sanitizedWallet,
         amountAfterFee
       );

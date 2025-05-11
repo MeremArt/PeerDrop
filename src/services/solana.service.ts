@@ -12,6 +12,7 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
+  getOrCreateAssociatedTokenAccount,
   createTransferInstruction,
   createAssociatedTokenAccountInstruction,
 } from "@solana/spl-token";
@@ -550,6 +551,98 @@ class SolanaService {
       throw new Error(
         `Failed to create associated token account: ${(error as Error).message}`
       );
+    }
+  }
+  /**
+   * Create a token account for an external wallet (like Civic Auth wallet)
+   * @param walletAddress The external wallet's public key
+   */
+  async createTokenAccountForExternalWallet(walletAddress: string): Promise<{
+    tokenAccount: string | null;
+    tokenAccountCreated: boolean;
+    tokenAccountTxSignature: string | null;
+  }> {
+    try {
+      // Validate wallet address
+      const publicKey = new PublicKey(walletAddress);
+
+      // Use your app's fee payer wallet - get from environment variables
+      const feePayerPrivateKey = process.env.FEE_PAYER_PRIVATE_KEY;
+      if (!feePayerPrivateKey) {
+        throw new Error(
+          "Fee payer private key not found in environment variables"
+        );
+      }
+
+      const feePayer = Keypair.fromSecretKey(bs58.decode(feePayerPrivateKey));
+
+      // Get the associated token account address
+      const tokenAccountAddress = await getAssociatedTokenAddress(
+        this.soincMint,
+        publicKey,
+        false,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      // Check if the token account already exists
+      const account = await this.connection.getAccountInfo(tokenAccountAddress);
+
+      if (account !== null) {
+        // Token account already exists
+        return {
+          tokenAccount: tokenAccountAddress.toString(),
+          tokenAccountCreated: false,
+          tokenAccountTxSignature: null,
+        };
+      }
+
+      // Get a fresh blockhash for the token account transaction
+      const {
+        blockhash: tokenBlockhash,
+        lastValidBlockHeight: tokenLastValidBlockHeight,
+      } = await this.connection.getLatestBlockhash();
+
+      // Create a transaction to create the associated token account
+      const tokenAccountTx = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          feePayer.publicKey, // Payer
+          tokenAccountAddress, // Associated token account address
+          publicKey, // Owner
+          this.soincMint, // Mint
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
+
+      tokenAccountTx.recentBlockhash = tokenBlockhash;
+      tokenAccountTx.feePayer = feePayer.publicKey;
+
+      // Sign and immediately send token account transaction
+      tokenAccountTx.sign(feePayer);
+      const tokenAccountTxSignature = await this.connection.sendRawTransaction(
+        tokenAccountTx.serialize()
+      );
+
+      // Wait for confirmation with explicit blocking
+      await this.connection.confirmTransaction({
+        signature: tokenAccountTxSignature,
+        blockhash: tokenBlockhash,
+        lastValidBlockHeight: tokenLastValidBlockHeight,
+      });
+
+      return {
+        tokenAccount: tokenAccountAddress.toString(),
+        tokenAccountCreated: true,
+        tokenAccountTxSignature,
+      };
+    } catch (error) {
+      console.error("Error creating token account for external wallet:", error);
+      return {
+        tokenAccount: null,
+        tokenAccountCreated: false,
+        tokenAccountTxSignature: null,
+      };
     }
   }
 }

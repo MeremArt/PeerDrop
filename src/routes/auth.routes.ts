@@ -1,18 +1,29 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { body, param } from "express-validator";
 import * as authController from "../controllers/auth.controller";
+import { authenticate, AuthRequest } from "../middleware/auth.middleware";
+import express from "express";
 
-const router = Router();
+const router = express.Router();
+
+// Custom interface that extends AuthRequest for standardization middleware
+interface StandardizedRequest extends AuthRequest {
+  body: {
+    tiktokUsername?: string;
+    newTiktokUsername?: string;
+    [key: string]: any;
+  };
+  params: {
+    tiktokUsername?: string;
+    [key: string]: any;
+  };
+}
 
 // Middleware to standardize TikTok usernames (remove @ if present)
-// Middleware to standardize TikTok usernames
 const standardizeTiktokUsername = (
-  req: {
-    body: { tiktokUsername: string; newTiktokUsername: string };
-    params: { tiktokUsername: string };
-  },
-  res: any,
-  next: () => void
+  req: StandardizedRequest,
+  res: Response,
+  next: NextFunction
 ) => {
   if (req.body.tiktokUsername) {
     req.body.tiktokUsername = req.body.tiktokUsername.replace(/^@/, "");
@@ -27,160 +38,70 @@ const standardizeTiktokUsername = (
 };
 
 /**
- * @swagger
- * tags:
- *   name: Authentication
- *   description: User authentication and registration endpoints
+ * Register a new user - supports both traditional and Civic Auth
  */
-
-/**
- * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *               - tiktokUsername
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 description: User's email address
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 6
- *                 description: User's password (min 6 characters)
- *               tiktokUsername:
- *                 type: string
- *                 pattern: '^@?[a-zA-Z0-9_.]{1,24}$'
- *                 description: TikTok username (with or without @ symbol)
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 token:
- *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     tiktokUsername:
- *                       type: string
- *                     walletAddress:
- *                       type: string
- *       400:
- *         description: Validation error or user already exists
- *       500:
- *         description: Server error
- */
-
 router.post(
   "/register",
-  standardizeTiktokUsername,
   [
-    body("email")
-      .isEmail()
-      .withMessage("Invalid email format")
-      .normalizeEmail(),
-    body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters long"),
+    body("email").isEmail().withMessage("Please enter a valid email"),
     body("tiktokUsername")
-      .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
-      .withMessage(
-        "Invalid TikTok username format (e.g., @username or username)"
-      ),
+      .notEmpty()
+      .withMessage("TikTok username is required"),
+    body("password")
+      .if(body("authMethod").not().equals("civic")) // Only validate password for traditional auth
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters long"),
   ],
   authController.register
 );
 
 /**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Authenticate user and get token
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - tiktokUsername
- *               - password
- *             properties:
- *               tiktokUsername:
- *                 type: string
- *                 pattern: '^@?[a-zA-Z0-9_.]{1,24}$'
- *                 description: TikTok username (with or without @ symbol)
- *               password:
- *                 type: string
- *                 format: password
- *                 description: User's password
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 token:
- *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     tiktokUsername:
- *                       type: string
- *                     walletAddress:
- *                       type: string
- *       401:
- *         description: Invalid credentials
- *       500:
- *         description: Server error
+ * Login a user - supports both traditional and Civic Auth
  */
 router.post(
   "/login",
-  standardizeTiktokUsername,
   [
     body("tiktokUsername")
-      .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
-      .withMessage(
-        "Invalid TikTok username format (e.g., @username or username)"
-      ),
-    body("password").exists().withMessage("Password is required"),
+      .if(body("authMethod").not().equals("civic")) // Only require for traditional login
+      .notEmpty()
+      .withMessage("TikTok username is required"),
+    body("password")
+      .if(body("authMethod").not().equals("civic")) // Only require for traditional login
+      .notEmpty()
+      .withMessage("Password is required"),
+    body("walletAddress")
+      .if(body("authMethod").equals("civic")) // Only require for Civic Auth login
+      .notEmpty()
+      .withMessage("Wallet address is required for Civic Auth"),
   ],
   authController.login
 );
 
+/**
+ * Connect a Civic wallet to an existing account
+ */
+router.post(
+  "/connect-wallet",
+  authenticate as express.RequestHandler, // Type assertion to fix TypeScript error
+  [body("walletAddress").notEmpty().withMessage("Wallet address is required")],
+  authController.connectWallet as express.RequestHandler // Type assertion to fix TypeScript error
+);
+
+/**
+ * Get current user profile
+ */
+router.get(
+  "/me",
+  authenticate as express.RequestHandler, // Type assertion to fix TypeScript error
+  authController.getCurrentUser as express.RequestHandler // Type assertion to fix TypeScript error
+);
+
+/**
+ * Get user by TikTok username
+ */
 router.get(
   "/tiktok/:tiktokUsername",
-  standardizeTiktokUsername,
+  standardizeTiktokUsername as express.RequestHandler, // Type assertion to fix TypeScript error
   [
     param("tiktokUsername")
       .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
@@ -188,15 +109,20 @@ router.get(
   ],
   authController.getUserByTiktokUsername
 );
-// Update TikTok username
+
+/**
+ * Update TikTok username
+ */
 router.patch(
   "/update-tiktok-username",
-  standardizeTiktokUsername,
+  authenticate as express.RequestHandler, // Type assertion to fix TypeScript error
+  standardizeTiktokUsername as express.RequestHandler, // Type assertion to fix TypeScript error
   [
     body("newTiktokUsername")
       .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
       .withMessage("Invalid TikTok username format"),
   ],
-  authController.updateTiktokUsername
+  authController.updateTiktokUsername as express.RequestHandler // Type assertion to fix TypeScript error
 );
+
 export default router;
