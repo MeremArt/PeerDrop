@@ -1,6 +1,5 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-// src/routes/withdrawalRoutes.ts
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const auth_middleware_1 = require("../middleware/auth.middleware");
@@ -44,23 +43,6 @@ const router = (0, express_1.Router)();
  *     responses:
  *       200:
  *         description: Withdrawal completed successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 transactionId:
- *                   type: string
- *                 from:
- *                   type: object
- *                 to:
- *                   type: object
- *                 amount:
- *                   type: number
- *                 timestamp:
- *                   type: string
  *       400:
  *         description: Invalid request or insufficient balance
  *       401:
@@ -70,7 +52,8 @@ const router = (0, express_1.Router)();
  *       500:
  *         description: Server error
  */
-router.post("/wallet", auth_middleware_1.authMiddleware, [
+router.post("/wallet", auth_middleware_1.authenticate, // Type assertion to fix TypeScript error
+[
     (0, express_validator_1.body)("tiktokUsername")
         .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
         .withMessage("Invalid TikTok username format"),
@@ -82,7 +65,8 @@ router.post("/wallet", auth_middleware_1.authMiddleware, [
         .withMessage("Amount must be a number")
         .isFloat({ gt: 0 })
         .withMessage("Amount must be greater than 0"),
-], transactionController_1.withdrawToExternalWallet);
+], transactionController_1.withdrawToExternalWallet // Type assertion to fix TypeScript error
+);
 /**
  * @swagger
  * /api/withdrawals/bank:
@@ -123,21 +107,6 @@ router.post("/wallet", auth_middleware_1.authMiddleware, [
  *     responses:
  *       200:
  *         description: Withdrawal request submitted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 reference:
- *                   type: string
- *                 amount:
- *                   type: number
- *                 status:
- *                   type: string
- *                 timestamp:
- *                   type: string
  *       400:
  *         description: Invalid request or insufficient balance
  *       401:
@@ -147,7 +116,8 @@ router.post("/wallet", auth_middleware_1.authMiddleware, [
  *       500:
  *         description: Server error
  */
-router.post("/bank", auth_middleware_1.authMiddleware, [
+router.post("/bank", auth_middleware_1.authenticate, // Type assertion to fix TypeScript error
+[
     (0, express_validator_1.body)("tiktokUsername")
         .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
         .withMessage("Invalid TikTok username format"),
@@ -171,5 +141,8 @@ router.post("/bank", auth_middleware_1.authMiddleware, [
         .isString()
         .notEmpty()
         .withMessage("Bank name is required"),
-], transactionController_1.withdrawToBank);
+], transactionController_1.withdrawToBank // Type assertion to fix TypeScript error
+);
+// Add these type declarations if your controller functions need them
+// This helps TypeScript understand the correct types for your controller handlers
 exports.default = router;

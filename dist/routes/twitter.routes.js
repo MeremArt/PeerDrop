@@ -36,10 +36,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const twitterController = __importStar(require("../controllers/twitter.controller"));
-const auth_middleware_1 = require("../middleware/auth.middleware");
+// import { authMiddleware } from "../middleware/auth.middleware";
 const router = (0, express_1.Router)();
 // Protect all routes with authentication
-router.use(auth_middleware_1.authMiddleware);
+// router.use(authMiddleware);
 /**
  * @swagger
  * /api/twitter/engagement/tweet/{tweetId}:

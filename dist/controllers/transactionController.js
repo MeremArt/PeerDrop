@@ -36,10 +36,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.withdrawToBank = exports.withdrawToExternalWallet = exports.getBalance = exports.getTransactionHistory = exports.getWalletBalance = exports.getTransactionStatus = exports.sendTransaction = void 0;
+exports.withdrawToExternalWallet = exports.withdrawToBank = exports.getBalance = exports.getTransactionHistory = exports.getWalletBalance = exports.getTransactionStatus = exports.sendTransaction = void 0;
 const express_validator_1 = require("express-validator");
 const user_service_1 = __importDefault(require("../services/user.service"));
 const withdrawal_service_1 = __importDefault(require("../services/withdrawal.service"));
+const web3_js_1 = require("@solana/web3.js");
 const solana_service_1 = __importDefault(require("../services/solana.service"));
 const treasuryConfig = __importStar(require("../config/treasury"));
 const mongoose_1 = require("mongoose");
@@ -59,6 +60,13 @@ const sendTransaction = async (req, res) => {
                 message: !sender ? "Sender not found" : "Receiver not found",
             });
         }
+        // Check if sender has privateKey (required for traditional accounts)
+        if (!sender.privateKey) {
+            return res.status(400).json({
+                message: "Cannot process transaction",
+                error: "Sender does not have a managed wallet private key. For Civic Auth users, please send directly from your wallet.",
+            });
+        }
         // Check sender's balance
         const balance = await solana_service_1.default.getBalance(sender.walletAddress);
         if (balance < amount) {
@@ -68,8 +76,9 @@ const sendTransaction = async (req, res) => {
                 available: balance,
             });
         }
-        // Create and send transaction
-        const transaction = await solana_service_1.default.sendTransaction(sender.privateKey, receiver.walletAddress, amount);
+        // Create and send transaction - Use non-null assertion
+        const transaction = await solana_service_1.default.sendTransaction(sender.privateKey, // Non-null assertion after check
+        receiver.walletAddress, amount);
         // Return transaction details
         return res.json({
             message: "Transaction initiated successfully",
@@ -258,61 +267,6 @@ const getBalance = async (req, res) => {
 };
 exports.getBalance = getBalance;
 // Modified approach for wallet withdrawals:
-const withdrawToExternalWallet = async (req, res) => {
-    try {
-        const { tiktokUsername, destinationWallet, amount } = req.body;
-        // Get user details
-        const user = await user_service_1.default.findByTiktokUsername(tiktokUsername);
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        // Check user's balance
-        const balance = await solana_service_1.default.getBalance(user.walletAddress);
-        if (balance < amount) {
-            return res.status(400).json({
-                message: "Insufficient balance",
-                required: amount,
-                available: balance,
-            });
-        }
-        // Create and send transaction from user's custodial wallet to their external wallet
-        const transaction = await solana_service_1.default.sendTransaction(user.privateKey, destinationWallet, amount);
-        // Convert userId to string if it's an ObjectId
-        const userId = user._id instanceof mongoose_1.Types.ObjectId
-            ? user._id.toString()
-            : String(user._id);
-        // Record withdrawal in database
-        const withdrawal = await withdrawal_service_1.default.createWithdrawal({
-            userId, // Now properly handled
-            amount,
-            destinationWallet,
-            transactionId: transaction,
-            method: "wallet",
-            status: "completed",
-        });
-        // Return transaction details
-        return res.json({
-            message: "Withdrawal completed successfully",
-            transactionId: transaction,
-            from: {
-                username: user.tiktokUsername,
-                wallet: user.walletAddress,
-            },
-            to: {
-                wallet: destinationWallet,
-            },
-            amount,
-            timestamp: new Date(),
-        });
-    }
-    catch (error) {
-        return res.status(500).json({
-            message: "Error processing withdrawal",
-            error: error instanceof Error ? error.message : String(error),
-        });
-    }
-};
-exports.withdrawToExternalWallet = withdrawToExternalWallet;
 const withdrawToBank = async (req, res) => {
     try {
         const { tiktokUsername, bankDetails, amount } = req.body;
@@ -329,13 +283,20 @@ const withdrawToBank = async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
-        // Check user's balance
-        const balance = await solana_service_1.default.getBalance(user.walletAddress);
-        if (balance < amount) {
+        // Check if user has privateKey (required for traditional accounts)
+        if (!user.privateKey) {
             return res.status(400).json({
-                message: "Insufficient balance",
+                message: "Cannot process withdrawal",
+                error: "User does not have a managed wallet private key. For Civic Auth users, please withdraw directly from your wallet.",
+            });
+        }
+        // Check user's token balance
+        const tokenBalance = await solana_service_1.default.getTokenBalance(user.walletAddress);
+        if (tokenBalance < amount) {
+            return res.status(400).json({
+                message: "Insufficient token balance",
                 required: amount,
-                available: balance,
+                available: tokenBalance,
             });
         }
         // Calculate fee if applicable
@@ -343,9 +304,9 @@ const withdrawToBank = async (req, res) => {
         const fee = (amount * feePercentage) / 100;
         const amountAfterFee = amount - fee;
         // Deduct tokens from user's account
-        // This requires a transaction to your treasury wallet
-        const transaction = await solana_service_1.default.sendTransaction(user.privateKey, treasuryConfig.TREASURY_WALLET_ADDRESS, // Your company's treasury wallet
-        amount);
+        // Use non-null assertion (!) since we've already checked for null above
+        const transaction = await solana_service_1.default.sendTransaction(user.privateKey, // Non-null assertion
+        treasuryConfig.TREASURY_WALLET_ADDRESS, amount);
         // Create a pending bank withdrawal record
         const withdrawalReference = `SON-${Date.now()
             .toString()
@@ -383,3 +344,176 @@ const withdrawToBank = async (req, res) => {
     }
 };
 exports.withdrawToBank = withdrawToBank;
+/**
+ * Validates if a string is a valid Solana address (base58 encoded)
+ */
+function isValidSolanaAddress(address) {
+    try {
+        new web3_js_1.PublicKey(address);
+        return true;
+    }
+    catch (error) {
+        console.error("Invalid Solana address:", error);
+        return false;
+    }
+}
+/**
+ * Sanitizes a wallet address string
+ */
+function sanitizeWalletAddress(address) {
+    return address.trim();
+}
+const withdrawToExternalWallet = async (req, res) => {
+    try {
+        console.log("Withdrawal request body:", JSON.stringify(req.body));
+        const { tiktokUsername, destinationWallet, amount } = req.body;
+        // Validate required fields
+        if (!tiktokUsername || !destinationWallet || !amount) {
+            return res.status(400).json({
+                message: "Missing required fields",
+                requiredFields: ["tiktokUsername", "destinationWallet", "amount"],
+            });
+        }
+        // Sanitize and validate wallet address
+        const sanitizedWallet = sanitizeWalletAddress(destinationWallet);
+        console.log(`Original wallet: "${destinationWallet}", Sanitized wallet: "${sanitizedWallet}"`);
+        if (!isValidSolanaAddress(sanitizedWallet)) {
+            return res.status(400).json({
+                message: "Invalid destination wallet address",
+                error: "The provided address is not a valid Solana address",
+            });
+        }
+        // Validate amount
+        const parsedAmount = parseFloat(amount);
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return res.status(400).json({
+                message: "Invalid amount",
+                error: "Amount must be a positive number",
+            });
+        }
+        // Validate minimum withdrawal amount
+        if (parsedAmount < treasuryConfig.MINIMUM_WITHDRAWAL) {
+            return res.status(400).json({
+                message: `Minimum withdrawal amount is ${treasuryConfig.MINIMUM_WITHDRAWAL}`,
+                required: treasuryConfig.MINIMUM_WITHDRAWAL,
+                available: parsedAmount,
+            });
+        }
+        // Get user details
+        const user = await user_service_1.default.findByTiktokUsername(tiktokUsername);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        // Check if user has privateKey (required for traditional accounts)
+        if (!user.privateKey) {
+            return res.status(400).json({
+                message: "Cannot process withdrawal",
+                error: "User does not have a managed wallet private key. For Civic Auth users, please withdraw directly from your wallet.",
+            });
+        }
+        // Check if user has enough SOINC tokens
+        const tokenBalance = await solana_service_1.default.getTokenBalance(user.walletAddress);
+        if (tokenBalance < parsedAmount) {
+            return res.status(400).json({
+                message: "Insufficient token balance",
+                required: parsedAmount,
+                available: tokenBalance,
+            });
+        }
+        // Make sure user has enough SOL to pay for transaction fees
+        const solBalance = await solana_service_1.default.getBalance(user.walletAddress);
+        if (solBalance < 0.01) {
+            // Minimum SOL for transaction fees
+            return res.status(400).json({
+                message: "Insufficient SOL for transaction fees",
+                required: 0.01,
+                available: solBalance,
+            });
+        }
+        // Calculate fee if applicable
+        const feePercentage = treasuryConfig.WITHDRAWAL_FEE_PERCENTAGE;
+        const fee = (parsedAmount * feePercentage) / 100;
+        const amountAfterFee = parsedAmount - fee;
+        console.log(`Processing withdrawal: ${parsedAmount} SOINC from ${user.walletAddress} to ${sanitizedWallet}`);
+        console.log(`Fee: ${fee} SOINC (${feePercentage}%), Amount after fee: ${amountAfterFee} SOINC`);
+        // Send tokens directly to user's destination wallet - Now using non-null assertion since we checked above
+        let transactionId = null;
+        try {
+            console.log(`Sending ${amountAfterFee} SOINC to destination: ${sanitizedWallet}`);
+            // Use non-null assertion (!) since we've already checked for null above
+            transactionId = await solana_service_1.default.sendTransaction(user.privateKey, // Non-null assertion
+            sanitizedWallet, amountAfterFee);
+            console.log(`Transaction successful: ${transactionId}`);
+        }
+        catch (txError) {
+            console.error("Transaction error details:", txError);
+            // Check for common error types and provide better error messages
+            const errorMessage = txError instanceof Error ? txError.message : String(txError);
+            if (errorMessage.includes("insufficient lamports") ||
+                errorMessage.includes("0x1")) {
+                return res.status(400).json({
+                    message: "Insufficient SOL to pay for transaction fees",
+                    error: "Please add more SOL to your wallet to cover transaction fees",
+                });
+            }
+            else if (errorMessage.includes("Non-base58 character")) {
+                return res.status(400).json({
+                    message: "Invalid wallet address format",
+                    error: "The destination wallet address contains invalid characters",
+                });
+            }
+            else {
+                return res.status(500).json({
+                    message: "Transaction error",
+                    error: errorMessage,
+                });
+            }
+        }
+        // Record withdrawal in database with fee information
+        const userId = user._id instanceof mongoose_1.Types.ObjectId
+            ? user._id.toString()
+            : String(user._id);
+        try {
+            // Note that we're tracking the fee in the notes, even though we're not sending it separately
+            const withdrawal = await withdrawal_service_1.default.createWithdrawal({
+                userId,
+                amount: amountAfterFee, // We send the amount after fee
+                destinationWallet: sanitizedWallet,
+                transactionId: transactionId,
+                method: "wallet",
+                status: "completed",
+                notes: fee > 0 ? `Fee: ${fee} (${feePercentage}%)` : undefined,
+            });
+            console.log(`Withdrawal record created: ${withdrawal._id}`);
+        }
+        catch (dbError) {
+            console.error("Database error when recording withdrawal:", dbError);
+            // We'll still return success to the user since the transaction succeeded,
+            // but log the database error for investigation
+        }
+        // Return transaction details
+        return res.json({
+            message: "Withdrawal completed successfully",
+            transactionId: transactionId,
+            from: {
+                username: user.tiktokUsername,
+                wallet: user.walletAddress,
+            },
+            to: {
+                wallet: sanitizedWallet,
+            },
+            amount: amountAfterFee,
+            fee: fee,
+            originalAmount: parsedAmount,
+            timestamp: new Date(),
+        });
+    }
+    catch (error) {
+        console.error("Wallet withdrawal error:", error);
+        return res.status(500).json({
+            message: "Error processing withdrawal",
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+};
+exports.withdrawToExternalWallet = withdrawToExternalWallet;

@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { param, query } from "express-validator";
 import * as twitterController from "../controllers/twitter.controller";
-import { authMiddleware } from "../middleware/auth.middleware";
+// import { authMiddleware } from "../middleware/auth.middleware";
 
 const router = Router();
 
 // Protect all routes with authentication
-router.use(authMiddleware);
+// router.use(authMiddleware);
 
 /**
  * @swagger

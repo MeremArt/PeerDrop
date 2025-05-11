@@ -1,42 +1,9 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const mongoose_1 = __importStar(require("mongoose"));
+const mongoose_1 = require("mongoose");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 /**
  * @swagger
@@ -72,6 +39,17 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
  *         privateKey:
  *           type: string
  *           description: Encrypted Solana wallet private key
+ *         tokenAccountAddress:
+ *           type: string
+ *           description: Solana associated token account address for SONIC
+ *         tokenAccountCreated:
+ *           type: boolean
+ *           default: false
+ *           description: Whether the token account has been successfully created
+ *         tokenAccountCreationDate:
+ *           type: string
+ *           format: date-time
+ *           description: When the token account was created
  *         twitterId:
  *           type: string
  *           description: Twitter user ID
@@ -98,53 +76,92 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
  *           description: Account creation timestamp
  */
 const userSchema = new mongoose_1.Schema({
+    // Keep your existing fields
     email: {
         type: String,
         required: true,
         unique: true,
+        trim: true,
+        lowercase: true,
     },
     password: {
         type: String,
-        required: true,
-    },
-    walletAddress: {
-        type: String,
-        required: true,
-    },
-    privateKey: {
-        type: String,
-        required: true,
-        // Note: In production, this should be encrypted
+        // Make password optional for Civic Auth users
+        required: function () {
+            return this.authMethod === "traditional" || this.authMethod === "dual";
+        },
+        min: [8, "Password must be at least 8 characters long"],
     },
     tiktokUsername: {
         type: String,
         required: true,
         unique: true,
+        trim: true,
     },
-    createdAt: {
+    walletAddress: {
+        type: String,
+        required: true,
+        unique: true,
+    },
+    privateKey: {
+        type: String,
+        // Private key not required for Civic Auth users
+        required: function () {
+            return this.authMethod === "traditional";
+        },
+    },
+    // Keep your existing token account fields
+    tokenAccountAddress: {
+        type: String,
+        default: null,
+    },
+    tokenAccountCreated: {
+        type: Boolean,
+        default: false,
+    },
+    tokenAccountCreationDate: {
         type: Date,
-        default: Date.now,
+        default: null,
     },
+    // Add new fields for Civic Auth
+    authMethod: {
+        type: String,
+        enum: ["traditional", "civic", "dual"],
+        default: "traditional",
+    },
+    lastLogin: {
+        type: Date,
+        default: null,
+    },
+}, {
+    timestamps: true,
 });
+// Your existing password hashing and validation methods
 userSchema.pre("save", async function (next) {
-    if (!this.isModified("password"))
-        return next();
-    try {
-        const salt = await bcryptjs_1.default.genSalt(10);
-        this.password = await bcryptjs_1.default.hash(this.password, salt);
-        next();
+    const user = this;
+    // Only hash the password if it has been modified or is new, and if it exists
+    if ((user.isModified("password") || user.isNew) && user.password) {
+        try {
+            const salt = await bcryptjs_1.default.genSalt(10);
+            user.password = await bcryptjs_1.default.hash(user.password, salt);
+        }
+        catch (error) {
+            return next(error);
+        }
     }
-    catch (error) {
-        next(error);
-    }
+    next();
 });
-// Method to compare passwords
 userSchema.methods.comparePassword = async function (candidatePassword) {
     try {
+        // If no password (Civic Auth user), return false
+        if (!this.password) {
+            return false;
+        }
         return await bcryptjs_1.default.compare(candidatePassword, this.password);
     }
     catch (error) {
-        throw new Error(`Password comparison error: ${error.message}`);
+        throw error;
     }
 };
-exports.default = mongoose_1.default.model("User", userSchema);
+const User = (0, mongoose_1.model)("User", userSchema);
+exports.default = User;

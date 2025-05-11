@@ -14,6 +14,9 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, tiktokUsername, password } = req.body;
+        if (!tiktokUsername) {
+            return res.status(400).json({ message: "TikTok username is required" });
+        }
         // Register user and create wallet
         const user = await user_service_1.default.registerUser({
             email,
@@ -156,7 +159,7 @@ const updateUser = async (req, res) => {
 };
 exports.updateUser = updateUser;
 const updateTiktokUsername = async (req, res) => {
-    var _a;
+    var _a, _b;
     try {
         const errors = (0, express_validator_1.validationResult)(req);
         if (!errors.isEmpty()) {
@@ -168,12 +171,13 @@ const updateTiktokUsername = async (req, res) => {
         const formattedUsername = newTiktokUsername.replace(/^@/, "");
         // Check if username already taken
         const existingUser = await user_service_1.default.findByTiktokUsername(formattedUsername);
-        if (existingUser &&
-            typeof existingUser._id === "string" &&
-            existingUser._id.toString() !== userId) {
+        if (existingUser && ((_b = existingUser._id) === null || _b === void 0 ? void 0 : _b.toString()) !== userId) {
             return res.status(400).json({
                 message: "This TikTok username is already in use",
             });
+        }
+        if (!userId) {
+            return res.status(400).json({ message: "User ID is required" });
         }
         const updatedUser = await user_service_1.default.updateUser(userId, {
             tiktokUsername: formattedUsername,

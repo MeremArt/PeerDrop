@@ -17,6 +17,10 @@ export const registerUser = async (
 
     const { email, tiktokUsername, password } = req.body;
 
+    if (!tiktokUsername) {
+      return res.status(400).json({ message: "TikTok username is required" });
+    }
+
     // Register user and create wallet
     const user = await userService.registerUser({
       email,
@@ -204,16 +208,15 @@ export const updateTiktokUsername = async (
     const existingUser = await userService.findByTiktokUsername(
       formattedUsername
     );
-    if (
-      existingUser &&
-      typeof existingUser._id === "string" &&
-      existingUser._id.toString() !== userId
-    ) {
+    if (existingUser && existingUser._id?.toString() !== userId) {
       return res.status(400).json({
         message: "This TikTok username is already in use",
       });
     }
 
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
     const updatedUser = await userService.updateUser(userId, {
       tiktokUsername: formattedUsername,
     });

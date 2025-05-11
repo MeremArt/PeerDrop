@@ -11,9 +11,9 @@ dotenv_1.default.config();
 // Treasury wallet address for receiving funds from bank withdrawals
 exports.TREASURY_WALLET_ADDRESS = process.env.TREASURY_WALLET_ADDRESS || "Your_Treasury_Wallet_Public_Key";
 // Fee configuration
-exports.WITHDRAWAL_FEE_PERCENTAGE = parseFloat(process.env.WITHDRAWAL_FEE_PERCENTAGE || "1");
+exports.WITHDRAWAL_FEE_PERCENTAGE = parseFloat(process.env.WITHDRAWAL_FEE_PERCENTAGE || "0.1");
 // Minimum amount for withdrawals
-exports.MINIMUM_WITHDRAWAL = parseFloat(process.env.MINIMUM_WITHDRAWAL || "10");
+exports.MINIMUM_WITHDRAWAL = parseFloat(process.env.MINIMUM_WITHDRAWAL || "1");
 // Processing time estimates (in business days)
 exports.BANK_PROCESSING_TIME = {
     min: parseInt(process.env.MIN_PROCESSING_DAYS || "1", 10),

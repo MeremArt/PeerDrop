@@ -77,16 +77,16 @@ router.get(
 );
 
 // Update TikTok username
-router.patch(
-  "/update-tiktok-username",
-  standardizeTiktokUsername,
-  [
-    body("newTiktokUsername")
-      .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
-      .withMessage("Invalid TikTok username format"),
-  ],
-  userController.updateTiktokUsername
-);
+// router.patch(
+//   "/update-tiktok-username",
+//   standardizeTiktokUsername,
+//   [
+//     body("newTiktokUsername")
+//       .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
+//       .withMessage("Invalid TikTok username format"),
+//   ],
+//   userController.updateTiktokUsername
+// );
 
 // Delete user
 router.delete("/:userId", [userValidation.userId], userController.deleteUser);

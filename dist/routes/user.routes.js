@@ -84,11 +84,16 @@ router.get("/wallet/:walletAddress", [
 // Get user by email
 router.get("/email/:email", [(0, express_validator_1.param)("email").isEmail().withMessage("Invalid email format")], userController.getUserByEmail);
 // Update TikTok username
-router.patch("/update-tiktok-username", standardizeTiktokUsername, [
-    (0, express_validator_1.body)("newTiktokUsername")
-        .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
-        .withMessage("Invalid TikTok username format"),
-], userController.updateTiktokUsername);
+// router.patch(
+//   "/update-tiktok-username",
+//   standardizeTiktokUsername,
+//   [
+//     body("newTiktokUsername")
+//       .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
+//       .withMessage("Invalid TikTok username format"),
+//   ],
+//   userController.updateTiktokUsername
+// );
 // Delete user
 router.delete("/:userId", [userValidation.userId], userController.deleteUser);
 // Check if user exists (by email, tiktokUsername, or wallet)

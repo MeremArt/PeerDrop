@@ -32,13 +32,16 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
 const express_validator_1 = require("express-validator");
 const authController = __importStar(require("../controllers/auth.controller"));
-const router = (0, express_1.Router)();
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const express_1 = __importDefault(require("express"));
+const router = express_1.default.Router();
 // Middleware to standardize TikTok usernames (remove @ if present)
-// Middleware to standardize TikTok usernames
 const standardizeTiktokUsername = (req, res, next) => {
     if (req.body.tiktokUsername) {
         req.body.tiktokUsername = req.body.tiktokUsername.replace(/^@/, "");
@@ -52,148 +55,65 @@ const standardizeTiktokUsername = (req, res, next) => {
     next();
 };
 /**
- * @swagger
- * tags:
- *   name: Authentication
- *   description: User authentication and registration endpoints
+ * Register a new user - supports both traditional and Civic Auth
  */
-/**
- * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *               - tiktokUsername
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 description: User's email address
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 6
- *                 description: User's password (min 6 characters)
- *               tiktokUsername:
- *                 type: string
- *                 pattern: '^@?[a-zA-Z0-9_.]{1,24}$'
- *                 description: TikTok username (with or without @ symbol)
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 token:
- *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     tiktokUsername:
- *                       type: string
- *                     walletAddress:
- *                       type: string
- *       400:
- *         description: Validation error or user already exists
- *       500:
- *         description: Server error
- */
-router.post("/register", standardizeTiktokUsername, [
-    (0, express_validator_1.body)("email")
-        .isEmail()
-        .withMessage("Invalid email format")
-        .normalizeEmail(),
-    (0, express_validator_1.body)("password")
-        .isLength({ min: 6 })
-        .withMessage("Password must be at least 6 characters long"),
+router.post("/register", [
+    (0, express_validator_1.body)("email").isEmail().withMessage("Please enter a valid email"),
     (0, express_validator_1.body)("tiktokUsername")
-        .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
-        .withMessage("Invalid TikTok username format (e.g., @username or username)"),
+        .notEmpty()
+        .withMessage("TikTok username is required"),
+    (0, express_validator_1.body)("password")
+        .if((0, express_validator_1.body)("authMethod").not().equals("civic")) // Only validate password for traditional auth
+        .isLength({ min: 8 })
+        .withMessage("Password must be at least 8 characters long"),
 ], authController.register);
 /**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Authenticate user and get token
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - tiktokUsername
- *               - password
- *             properties:
- *               tiktokUsername:
- *                 type: string
- *                 pattern: '^@?[a-zA-Z0-9_.]{1,24}$'
- *                 description: TikTok username (with or without @ symbol)
- *               password:
- *                 type: string
- *                 format: password
- *                 description: User's password
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                 token:
- *                   type: string
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     tiktokUsername:
- *                       type: string
- *                     walletAddress:
- *                       type: string
- *       401:
- *         description: Invalid credentials
- *       500:
- *         description: Server error
+ * Login a user - supports both traditional and Civic Auth
  */
-router.post("/login", standardizeTiktokUsername, [
+router.post("/login", [
     (0, express_validator_1.body)("tiktokUsername")
-        .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
-        .withMessage("Invalid TikTok username format (e.g., @username or username)"),
-    (0, express_validator_1.body)("password").exists().withMessage("Password is required"),
+        .if((0, express_validator_1.body)("authMethod").not().equals("civic")) // Only require for traditional login
+        .notEmpty()
+        .withMessage("TikTok username is required"),
+    (0, express_validator_1.body)("password")
+        .if((0, express_validator_1.body)("authMethod").not().equals("civic")) // Only require for traditional login
+        .notEmpty()
+        .withMessage("Password is required"),
+    (0, express_validator_1.body)("walletAddress")
+        .if((0, express_validator_1.body)("authMethod").equals("civic")) // Only require for Civic Auth login
+        .notEmpty()
+        .withMessage("Wallet address is required for Civic Auth"),
 ], authController.login);
-router.get("/tiktok/:tiktokUsername", standardizeTiktokUsername, [
+/**
+ * Connect a Civic wallet to an existing account
+ */
+router.post("/connect-wallet", auth_middleware_1.authenticate, // Type assertion to fix TypeScript error
+[(0, express_validator_1.body)("walletAddress").notEmpty().withMessage("Wallet address is required")], authController.connectWallet // Type assertion to fix TypeScript error
+);
+/**
+ * Get current user profile
+ */
+router.get("/me", auth_middleware_1.authenticate, // Type assertion to fix TypeScript error
+authController.getCurrentUser // Type assertion to fix TypeScript error
+);
+/**
+ * Get user by TikTok username
+ */
+router.get("/tiktok/:tiktokUsername", standardizeTiktokUsername, // Type assertion to fix TypeScript error
+[
     (0, express_validator_1.param)("tiktokUsername")
         .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
         .withMessage("Invalid TikTok username format"),
 ], authController.getUserByTiktokUsername);
-// Update TikTok username
-router.patch("/update-tiktok-username", standardizeTiktokUsername, [
+/**
+ * Update TikTok username
+ */
+router.patch("/update-tiktok-username", auth_middleware_1.authenticate, // Type assertion to fix TypeScript error
+standardizeTiktokUsername, // Type assertion to fix TypeScript error
+[
     (0, express_validator_1.body)("newTiktokUsername")
         .matches(/^@?[a-zA-Z0-9_.]{1,24}$/)
         .withMessage("Invalid TikTok username format"),
-], authController.updateTiktokUsername);
+], authController.updateTiktokUsername // Type assertion to fix TypeScript error
+);
 exports.default = router;
