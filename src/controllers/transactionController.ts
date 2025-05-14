@@ -381,17 +381,46 @@ function sanitizeWalletAddress(address: string): string {
   return address.trim();
 }
 export const getAuthBalance = async (
-  req: Request,
+  req: Request<{ walletAddress: string }>,
   res: Response
 ): Promise<void> => {
   try {
     const { walletAddress } = req.params;
 
-    // Use your Solana service to get the balance
-    const balance = await solanaService.getBalance(walletAddress);
+    if (!walletAddress) {
+      res.status(400).json({ message: "Wallet address is required" });
+      return;
+    }
 
+    // Get SOL balance
+    const solBalance = await solanaService.getBalance(walletAddress);
+
+    // Get token balance if needed
+    let tokenBalance = 0;
+    try {
+      tokenBalance = await solanaService.getTokenBalance(walletAddress);
+    } catch (error) {
+      console.log("Token balance fetch error (non-critical):", error);
+      // Continue even if token balance fails
+    }
+
+    // Check token account
+    let tokenAccount = { address: "", exists: false };
+    try {
+      const tokenAccountInfo = await solanaService.checkTokenAccount(
+        walletAddress
+      );
+      tokenAccount = tokenAccountInfo;
+    } catch (error) {
+      console.log("Token account check error (non-critical):", error);
+      // Continue even if token account check fails
+    }
+
+    // Return the balance data
     res.json({
-      balance,
+      balance: solBalance,
+      tokenBalance: tokenBalance,
+      tokenAccount: tokenAccount,
     });
   } catch (error) {
     console.error("Get wallet balance error:", error);

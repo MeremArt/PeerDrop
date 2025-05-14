@@ -64,7 +64,7 @@ router.get(
   transactionController.getWalletBalance
 );
 router.get(
-  "/api/wallet/balance/:walletAddress",
+  "/wallets/balance/:walletAddress",
   transactionController.getAuthBalance
 );
 
