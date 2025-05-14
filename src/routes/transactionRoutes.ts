@@ -63,5 +63,9 @@ router.get(
   ],
   transactionController.getWalletBalance
 );
+router.get(
+  "/api/wallet/balance/:walletAddress",
+  transactionController.getAuthBalance
+);
 
 export default router;

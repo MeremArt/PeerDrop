@@ -380,7 +380,27 @@ function isValidSolanaAddress(address: string): boolean {
 function sanitizeWalletAddress(address: string): string {
   return address.trim();
 }
+export const getAuthBalance = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { walletAddress } = req.params;
 
+    // Use your Solana service to get the balance
+    const balance = await solanaService.getBalance(walletAddress);
+
+    res.json({
+      balance,
+    });
+  } catch (error) {
+    console.error("Get wallet balance error:", error);
+    res.status(500).json({
+      message: "Error fetching wallet balance",
+      error: (error as Error).message,
+    });
+  }
+};
 export const withdrawToExternalWallet = async (req: Request, res: Response) => {
   try {
     console.log("Withdrawal request body:", JSON.stringify(req.body));
