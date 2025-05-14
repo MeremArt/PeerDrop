@@ -24,8 +24,8 @@ dotenv.config();
 
 class SolanaService {
   private connection: Connection;
-  private soincMint: PublicKey;
-  private readonly SOINC_DECIMALS = 9;
+  private solMint: PublicKey;
+  private readonly SOL_DECIMALS = 9;
 
   constructor() {
     const commitment: Commitment = "processed";
@@ -34,8 +34,8 @@ class SolanaService {
       wsEndpoint: "wss://api.mainnet-beta.solana.com",
     });
 
-    this.soincMint = new PublicKey(
-      "SonicxvLud67EceaEzCLRnMTBqzYUUYNr93DBkBdDES"
+    this.solMint = new PublicKey(
+      "So11111111111111111111111111111111111111112" // Native SOL token mint address
     );
   }
 
@@ -65,7 +65,7 @@ class SolanaService {
 
       // Get the associated token account address
       const tokenAccountAddress = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         keypair.publicKey,
         false,
         TOKEN_PROGRAM_ID,
@@ -128,7 +128,7 @@ class SolanaService {
           funder.publicKey, // Payer
           tokenAccountAddress, // Associated token account address
           keypair.publicKey, // Owner
-          this.soincMint, // Mint
+          this.solMint, // Mint
           TOKEN_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         )
@@ -176,7 +176,7 @@ class SolanaService {
 
       // Get the associated token account
       const tokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         owner,
         false,
         TOKEN_PROGRAM_ID,
@@ -214,7 +214,7 @@ class SolanaService {
 
       // Get the associated token account address
       const tokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         walletPubKey,
         false,
         TOKEN_PROGRAM_ID,
@@ -238,7 +238,7 @@ class SolanaService {
           payerKeypair.publicKey, // Payer
           tokenAccount, // Associated token account address
           walletPubKey, // Owner
-          this.soincMint, // Mint
+          this.solMint, // Mint
           TOKEN_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         )
@@ -276,7 +276,7 @@ class SolanaService {
     try {
       const owner = new PublicKey(walletAddress);
       const tokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         owner,
         false
       );
@@ -297,7 +297,7 @@ class SolanaService {
     try {
       const owner = new PublicKey(walletAddress);
       const tokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         owner,
         true,
         TOKEN_PROGRAM_ID,
@@ -322,7 +322,7 @@ class SolanaService {
   ): Promise<string> {
     try {
       console.log(
-        `Transaction request: Sending ${amount} SOINC tokens to ${toWallet}`
+        `Transaction request: Sending ${amount} SOL tokens to ${toWallet}`
       );
 
       // Your validation code...
@@ -332,14 +332,14 @@ class SolanaService {
 
       // Get token accounts
       const fromTokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         fromKeypair.publicKey,
         false
       );
 
       // Check if destination has a token account
       const toTokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         toPublicKey,
         false
       );
@@ -354,9 +354,7 @@ class SolanaService {
       }
 
       // Convert amount to token units using the correct decimal places
-      const tokenAmount = Math.round(
-        amount * Math.pow(10, this.SOINC_DECIMALS)
-      );
+      const tokenAmount = Math.round(amount * Math.pow(10, this.SOL_DECIMALS));
 
       // Create token transfer instruction
       const transferInstruction = createTransferInstruction(
@@ -499,7 +497,7 @@ class SolanaService {
 
       // Get the associated token account address
       const tokenAccount = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         walletPubKey,
         false,
         TOKEN_PROGRAM_ID,
@@ -523,7 +521,7 @@ class SolanaService {
           payerKeypair.publicKey, // Payer
           tokenAccount, // Associated token account address
           walletPubKey, // Owner
-          this.soincMint, // Mint
+          this.solMint, // Mint
           TOKEN_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         )
@@ -578,7 +576,7 @@ class SolanaService {
 
       // Get the associated token account address
       const tokenAccountAddress = await getAssociatedTokenAddress(
-        this.soincMint,
+        this.solMint,
         publicKey,
         false,
         TOKEN_PROGRAM_ID,
@@ -609,7 +607,7 @@ class SolanaService {
           feePayer.publicKey, // Payer
           tokenAccountAddress, // Associated token account address
           publicKey, // Owner
-          this.soincMint, // Mint
+          this.solMint, // Mint
           TOKEN_PROGRAM_ID,
           ASSOCIATED_TOKEN_PROGRAM_ID
         )
