@@ -6,7 +6,7 @@
 
 ## Overview
 
-PeerDrop (a.k.a. PeerToPair) is a backend service written in TypeScript on Node.js/Express that enables peer-to-peer transfers of USDC (or a custom token “SOINC”) using TikTok usernames or SMS identifiers. It connects to the Solana blockchain for on-chain transfers, uses MongoDB for persistence, and provides Swagger-powered API documentation.  ([PeerDrop/src/app.ts at main · MeremArt/PeerDrop · GitHub](https://github.com/MeremArt/PeerDrop/blob/main/src/app.ts), [PeerDrop/src/config/database.ts at main · MeremArt/PeerDrop · GitHub](https://github.com/MeremArt/PeerDrop/blob/main/src/config/database.ts))
+PeerDrop (the CloutChain backend service) is a backend service written in TypeScript on Node.js/Express that enables peer-to-peer transfers of USDC (or a custom token “SOL”) using Social ID or SMS identifiers. It connects to the Solana blockchain for on-chain transfers, uses MongoDB for persistence, and provides Swagger-powered API documentation.  ([PeerDrop/src/app.ts at main · MeremArt/PeerDrop · GitHub](https://github.com/MeremArt/PeerDrop/blob/main/src/app.ts), [PeerDrop/src/config/database.ts at main · MeremArt/PeerDrop · GitHub](https://github.com/MeremArt/PeerDrop/blob/main/src/config/database.ts))
 
 ## Key Features
 
